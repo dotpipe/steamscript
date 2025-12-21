@@ -1,62 +1,47 @@
-## How to Start
 
-1. Build or pull the Docker image, or run in your JS/QuickJS environment.
-2. Start the shell:
-	- In Docker: `docker run -it js_shell`
-	- In CLI: `node js_shell.js` (if using Node.js, works best)
-	- In QuickJS: `qjs js_shell.js`
-3. On first login, create your user and save your shell key when prompted.
-4. Use the shell prompt to run commands, launch apps, or open the DotPipe window for remote connections.
+# js_shell Overview
 
+js_shell is a secure, user-centric JavaScript shell environment with a Linux-like CLI, per-user sandboxed filesystems, cryptographic login, and a hybrid GUI/CLI experience. It is extensible with pure JavaScript apps and supports remote connections via DotPipe.
 
-## How to Test
+## Quick Start
 
-js_shell includes a built-in test suite to validate core functionality, user isolation, and admin controls. Tests are written in pure JavaScript and run inside the shell environment—no Node.js or external dependencies required.
+| Environment | Command |
+|-------------|---------|
+| Docker      | `docker run -it js_shell` |
+| Node.js     | `node js_shell.js`        |
+| QuickJS     | `qjs js_shell.js`         |
 
-### Running the Test Suite
+On first login, create your user and save your shell key when prompted. Use the shell prompt to run commands, launch apps, or open the DotPipe window for remote connections.
 
-**From the js_shell prompt:**
+## Documentation Index
 
-1. Start js_shell as usual (see above).
-2. At the shell prompt, run:
+| Topic                | File                |
+|----------------------|---------------------|
+| App Catalog          | APPS_CATALOG.md     |
+| Boot Sequence        | BOOT_SEQUENCE.md    |
+| DotPipe Remote App   | DOTPIPE.md          |
+| Usage Guide          | USAGE_GUIDE.md      |
+| QuickJS Workaround   | QUICKJS_WORKAROUND.md |
 
-	```
-	run test.js
-	```
+## App Catalog (Summary)
 
-	This will execute all core tests (file creation, listing, echo, admin permissions, etc.).
+See [APPS_CATALOG.md](APPS_CATALOG.md) for a full list and descriptions of all apps.
 
-3. The output will show PASS/FAIL for each test and a summary at the end.
+## Boot Sequence (Summary)
 
-**In QuickJS:**
+See [BOOT_SEQUENCE.md](BOOT_SEQUENCE.md) for a detailed description of the shell's startup and initialization process.
 
-	```
-	qjs js_shell.js
-	# At the prompt:
-	run test.js
-	```
+## DotPipe (Summary)
 
-**In Docker:**
+See [DOTPIPE.md](DOTPIPE.md) for details on the DotPipe remote connection app and protocol.
 
-	```
-	docker run -it js_shell
-	# At the prompt:
-	run test.js
-	```
+## Usage Guide
 
-### What the Tests Cover
+See [USAGE_GUIDE.md](USAGE_GUIDE.md) for installation, setup, and shell usage instructions.
 
-- File operations: touch, ls, cat, rm
-- Command output: echo
-- User isolation: files are per-user
-- Admin controls: only the home user can run admin commands
-- Error handling: invalid commands, permission checks
+## QuickJS Workaround
 
-### Writing Your Own Tests
-
-You can add new tests by editing `test.js` or creating new JS files using the same pattern. Each test runs as a shell app and can use the `runApp` helper for command execution.
-
-For advanced or CI testing, see the developer guide (coming soon).
+See [QUICKJS_WORKAROUND.md](QUICKJS_WORKAROUND.md) for running js_shell in QuickJS or browser environments.
 
 
 # js_shell: The Secure, User-Centric JavaScript OS
