@@ -1,0 +1,13 @@
+{
+  "name": "js_shell",
+  "version": "0.1.0",
+  "description": "Minimal JS CLI shell with Linux-like utilities and app API.",
+  "main": "js_shell.js",
+  "bin": {
+    "js-shell": "js_shell.js",
+    "dotfly-cli": "dotfly-cli.js"
+  },
+  "dependencies": {
+    "readline-sync": "^1.4.10"
+  }
+}

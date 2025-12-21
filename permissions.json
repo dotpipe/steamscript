@@ -1,0 +1,17 @@
+{
+  "users": {
+    "home": {
+      "root": true,
+      "allowed_dirs": ["/"],
+      "allowed_cmds": ["ls", "cat", "echo", "touch", "rm", "pwd", "help", "cp", "mv", "grep", "head", "tail", "which", "find", "du", "sort", "uniq", "wc", "explorer", "python", "python3"],
+      "denied_cmds": ["shutdown", "reboot"]
+    }
+  },
+  "default": {
+    "root": false,
+    "allowed_dirs": ["/mnt/c/Users/g0d77/New folder/dotFly/js_shell/users/${USER}"],
+    "denied_dirs": ["/os/system", "/os/etc", "/os/root"],
+    "allowed_cmds": ["ls", "cat", "echo", "touch", "rm", "pwd", "help", "cp", "mv", "grep", "head", "tail", "which", "find", "du", "sort", "uniq", "wc", "explorer", "python", "python3"],
+    "denied_cmds": ["shutdown", "reboot"]
+  }
+}

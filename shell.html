@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>js_shell Window</title>
+  <style>
+    body { background: #181818; color: #eee; font-family: monospace; margin: 0; }
+    #shellout { white-space: pre-wrap; padding: 1em; }
+  </style>
+</head>
+<body>
+  <div id="shellout"></div>
+  <script>
+    window.shellout = function(txt) {
+      document.getElementById('shellout').textContent += txt;
+    };
+    window.clearShell = function() {
+      document.getElementById('shellout').textContent = '';
+    };
+  </script>
+</body>
+</html>

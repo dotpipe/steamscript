@@ -1,0 +1,14 @@
+#!/usr/bin/env node
+// dc
+const argv = process.argv.slice(2);
+if (!argv.length) {
+  process.stderr.write('dc: usage: dc expression\n');
+  process.exit(1);
+}
+try {
+  // Evaluate as floating point
+  const result = eval(argv.join(' '));
+  console.log(result);
+} catch (e) {
+  process.stderr.write('dc: invalid expression\n');
+}
