@@ -1,8 +1,22 @@
 // mkdir.js - universal mkdir command (Node.js)
 const fs = require('fs');
+const path = require('path');
+function isAllowed(dir, write = false) {
+  const user = process.env.JS_SHELL_USER;
+  if (user === 'home') return true;
+  const homeDir = path.resolve('users', user);
+  const abs = path.resolve(dir);
+  if (abs.startsWith(path.resolve('apps'))) return !write;
+  if (abs === path.resolve('js_shell.js')) return !write;
+  return abs.startsWith(homeDir);
+}
 module.exports = function(args, io) {
   if (!args.length) return io.stderr('mkdir: No directory specified.\n');
   args.forEach(dir => {
+    if (!isAllowed(dir, true)) {
+      io.stderr('mkdir: access denied: ' + dir + '\n');
+      return;
+    }
     try {
       fs.mkdirSync(dir, { recursive: true });
     } catch (e) {

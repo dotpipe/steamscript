@@ -18,6 +18,15 @@ module.exports = function cd(args, io, shell) {
   }
   const cwd = (shell && shell.cwd) ? shell.cwd : process.cwd();
   const newPath = path.resolve(cwd, target);
+  // Jail non-home users to their home directory
+  const user = process.env.JS_SHELL_USER;
+  if (user !== 'home') {
+    const homeDir = path.resolve('users', user);
+    if (!newPath.startsWith(homeDir) && !newPath.startsWith(path.resolve('apps')) && newPath !== path.resolve('js_shell.js')) {
+      io.stderr(`cd: access denied: ${target}\n`);
+      return 1;
+    }
+  }
   if (!fs.existsSync(newPath) || !fs.statSync(newPath).isDirectory()) {
     io.stderr(`cd: ${target}: No such directory\n`);
     return 1;

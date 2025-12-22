@@ -283,14 +283,39 @@ async function getUser() {
     password = await readLineRaw('Password: ', true);
     // Only require shell key for password reset, not for every login
     const keyPath = path.join(usersRoot, username, '.shellkey');
-    if (!fs.existsSync(keyPath)) {
+    let key = '';
+    let keyCreated = false;
+    let showKeyMsg = false;
+    if (fs.existsSync(keyPath)) {
+      key = fs.readFileSync(keyPath, 'utf-8').trim();
+    } else {
       // First login: generate key
-      const key = crypto.randomBytes(32).toString('hex');
+      key = crypto.randomBytes(32).toString('hex');
       fs.mkdirSync(path.dirname(keyPath), { recursive: true });
       fs.writeFileSync(keyPath, key + '\n', { mode: 0o600 });
-      process.stdout.write('\n*** IMPORTANT: Your new shell key is:\n');
+      keyCreated = true;
+      showKeyMsg = true;
+    }
+    // Always show the hash of the .shellkey file at login
+    const keyHash = crypto.createHash('sha256').update(key).digest('hex');
+    process.stdout.write('\n*** Your shell key hash is:\n');
+    process.stdout.write(keyHash + '\n');
+    process.stdout.write('This hash is derived from your .shellkey file and will persist for your account.***\n\n');
+    // Only show key message if key was just created or if there was a login error
+    if (keyCreated || process.env.JS_SHELL_LOGIN_ERROR === '1') {
+      process.stdout.write('\n*** IMPORTANT: Your shell key is:\n');
       process.stdout.write(key + '\n');
       process.stdout.write('Copy and save this key in a safe place. You will need it for password resets. If you lose it, only the admin can reset it.***\n\n');
+    }
+    // Admin debug info only if error or key created
+    if (username === 'home' && (keyCreated || process.env.JS_SHELL_LOGIN_ERROR === '1')) {
+      process.stdout.write('--- ADMIN DEBUG INFO ---\n');
+      process.stdout.write('User: ' + username + '\n');
+      process.stdout.write('Key file: ' + keyPath + '\n');
+      process.stdout.write('Key created this login: ' + (keyCreated ? 'yes' : 'no') + '\n');
+      process.stdout.write('Current working directory: ' + process.cwd() + '\n');
+      process.stdout.write('Session PID: ' + process.pid + '\n');
+      process.stdout.write('------------------------\n');
     }
     // Check password hash in shadow.json
     if (shadow[username] && shadow[username].hash && bcrypt.compareSync(password, shadow[username].hash)) break;
@@ -640,10 +665,6 @@ async function runApp(cmd, args, io) {
 }
 
 function getPrompt() {
-  const now = new Date();
-  const hh = String(now.getHours()).padStart(2, '0');
-  const mm = String(now.getMinutes()).padStart(2, '0');
-  const ss = String(now.getSeconds()).padStart(2, '0');
   // Show relative path to user's root
   let userRoot = typeof usersRoot === 'string' ? usersRoot : '';
   const user = (process.env && process.env.JS_SHELL_USER) ? process.env.JS_SHELL_USER : 'home';
@@ -656,8 +677,6 @@ function getPrompt() {
   relCwd = (userRoot && cwd) ? path.relative(userRoot, cwd) : '';
   if (!relCwd || relCwd === '') relCwd = '.';
   return (
-    highlight(`[${hh}:${mm}:${ss}]`, 'yellow') +
-    ' ' +
     highlight(relCwd, 'green') +
     ' ' +
     highlight('%', 'cyan') +

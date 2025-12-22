@@ -1,0 +1,17 @@
+version: '3.8'
+services:
+  js_shell:
+    build:
+      context: ..
+      dockerfile: steamscript/Dockerfile
+    image: js_shell:latest
+    container_name: js_shell
+    ports:
+      - "8080:8080" # Change or remove if not needed
+    volumes:
+      - ../users:/os/users
+      - ../shadow:/os/shadow
+    environment:
+      - NODE_ENV=production
+    stdin_open: true
+    tty: true

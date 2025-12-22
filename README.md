@@ -35,6 +35,24 @@ See [BOOT_SEQUENCE.md](BOOT_SEQUENCE.md) for a detailed description of the shell
 
 See [DOTPIPE.md](DOTPIPE.md) for details on the DotPipe remote connection app and protocol.
 
+
+## Docker Usage
+
+### Build and Run with Docker
+
+```
+docker build -t js_shell .
+docker run -it js_shell
+```
+
+### Using docker-compose
+
+```
+docker-compose up --build
+```
+
+This will mount the `users` and `shadow` directories for persistent user data.
+
 ## Usage Guide
 
 See [USAGE_GUIDE.md](USAGE_GUIDE.md) for installation, setup, and shell usage instructions.

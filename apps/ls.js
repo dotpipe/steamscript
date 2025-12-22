@@ -2,6 +2,15 @@
 const fs = require('fs');
 const path = require('path');
 const glob = require('glob');
+function isAllowed(dir) {
+  const user = process.env.JS_SHELL_USER;
+  if (user === 'home') return true;
+  const homeDir = path.resolve('users', user);
+  const abs = path.resolve(dir);
+  // Allow system files (apps, shell core)
+  if (abs.startsWith(path.resolve('apps')) || abs === path.resolve('js_shell.js')) return true;
+  return abs.startsWith(homeDir);
+}
 module.exports = function(args, io) {
 	let dir = '.';
 	let long = false, all = false, human = false, sortTime = false, reverse = false;
@@ -24,6 +33,10 @@ module.exports = function(args, io) {
 		} else {
 			dir = nonOptions[nonOptions.length - 1];
 		}
+	}
+	if (!isAllowed(dir)) {
+	  io.stderr('ls: access denied: ' + dir + '\n');
+	  return;
 	}
 	function humanSize(bytes) {
 		if (bytes < 1024) return bytes + 'B';

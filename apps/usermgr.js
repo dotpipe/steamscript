@@ -4,6 +4,13 @@ const path = require('path');
 
 const usersDbPath = path.join('users.json');
 const usersRoot = path.join('users');
+const shadowPath = path.join('shadow', 'shadow.json');
+let bcrypt;
+try {
+  bcrypt = require('bcrypt');
+} catch (e) {
+  throw new Error('bcrypt is required for usermgr to manage shadow.json');
+}
 
 module.exports = async function usermgr(args, io) {
   io = io || { stdin: () => '', stdout: () => {}, stderr: () => {} };
@@ -33,6 +40,16 @@ module.exports = async function usermgr(args, io) {
     }
     users[username] = { password, root: false };
     fs.writeFileSync(usersDbPath, JSON.stringify({ users }, null, 2));
+    // Add to shadow.json
+    let shadow = {};
+    if (fs.existsSync(shadowPath)) {
+      try {
+        shadow = JSON.parse(fs.readFileSync(shadowPath, 'utf-8')).users || {};
+      } catch { shadow = {}; }
+    }
+    const hash = bcrypt.hashSync(password, 10);
+    shadow[username] = { hash };
+    fs.writeFileSync(shadowPath, JSON.stringify({ users: shadow }, null, 2));
     const userDir = path.join(usersRoot, username);
     if (!fs.existsSync(userDir)) fs.mkdirSync(userDir, { recursive: true });
     io.stdout(`User ${username} added.\n`);
@@ -50,6 +67,15 @@ module.exports = async function usermgr(args, io) {
     }
     delete users[username];
     fs.writeFileSync(usersDbPath, JSON.stringify({ users }, null, 2));
+    // Remove from shadow.json
+    let shadow = {};
+    if (fs.existsSync(shadowPath)) {
+      try {
+        shadow = JSON.parse(fs.readFileSync(shadowPath, 'utf-8')).users || {};
+      } catch { shadow = {}; }
+    }
+    delete shadow[username];
+    fs.writeFileSync(shadowPath, JSON.stringify({ users: shadow }, null, 2));
     const userDir = path.join(usersRoot, username);
     if (fs.existsSync(userDir)) fs.rmSync(userDir, { recursive: true, force: true });
     io.stdout(`User ${username} deleted.\n`);
@@ -73,6 +99,16 @@ module.exports = async function usermgr(args, io) {
     }
     users[username].password = password;
     fs.writeFileSync(usersDbPath, JSON.stringify({ users }, null, 2));
+    // Update shadow.json
+    let shadow = {};
+    if (fs.existsSync(shadowPath)) {
+      try {
+        shadow = JSON.parse(fs.readFileSync(shadowPath, 'utf-8')).users || {};
+      } catch { shadow = {}; }
+    }
+    const hash = bcrypt.hashSync(password, 10);
+    shadow[username] = { hash };
+    fs.writeFileSync(shadowPath, JSON.stringify({ users: shadow }, null, 2));
     io.stdout(`Password updated for ${username}.\n`);
     return 0;
   }
