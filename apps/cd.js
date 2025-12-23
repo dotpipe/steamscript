@@ -21,8 +21,10 @@ module.exports = function cd(args, io, shell) {
   // Jail non-home users to their home directory
   const user = process.env.JS_SHELL_USER;
   if (user !== 'home') {
-    const homeDir = path.resolve('users', user);
-    if (!newPath.startsWith(homeDir) && !newPath.startsWith(path.resolve('apps')) && newPath !== path.resolve('js_shell.js')) {
+    // Use absolute path for homeDir jail
+    const usersRoot = require('path').resolve(__dirname, '../users');
+    const homeDir = path.join(usersRoot, user);
+    if (!newPath.startsWith(homeDir)) {
       io.stderr(`cd: access denied: ${target}\n`);
       return 1;
     }

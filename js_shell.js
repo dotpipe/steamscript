@@ -1,14 +1,92 @@
 #!/usr/bin/env node
-// js_shell.js - Secure, multi-user Node.js shell with robust session, input, and command logic
-
-// Built-in apps container must be defined before any function uses it
-const builtins = {};
 // Core modules
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const readline = require('readline');
 const crypto = require('crypto');
+
+// Persistent command history
+const HISTORY_FILE = path.join(os.homedir(), '.js_shell_history');
+function loadHistory() {
+  try {
+    if (fs.existsSync(HISTORY_FILE)) {
+      const lines = fs.readFileSync(HISTORY_FILE, 'utf-8').split(/\r?\n/).filter(Boolean);
+      return lines.slice(-50);
+    }
+  } catch { }
+  return [];
+}
+function saveHistory(history) {
+  try {
+    fs.writeFileSync(HISTORY_FILE, history.slice(-50).join('\n') + '\n', { mode: 0o600 });
+  } catch { }
+}
+
+// Utility: Count total user comments (feedback)
+function getFeedbackCount() {
+  try {
+    const COMMENTS_FILE = path.join(__dirname, 'comments.json');
+    if (!fs.existsSync(COMMENTS_FILE)) return 0;
+    const comments = JSON.parse(fs.readFileSync(COMMENTS_FILE, 'utf-8'));
+    let count = 0;
+    for (const user in comments) {
+      for (const day in comments[user]) {
+        count += comments[user][day].length;
+      }
+    }
+    return count;
+  } catch { return 0; }
+}
+
+// Admin command to view all user comments (feedback)
+const COMMENTS_FILE = path.join(__dirname, 'comments.json');
+// Built-in apps container must be defined before any function uses it
+const builtins = {};
+builtins.viewcomments = async (args, io) => {
+  let username = process.env.JS_SHELL_USER || os.userInfo().username || 'unknown';
+  if (username !== 'admin' && username !== 'home') {
+    io.stdout('Only the admin can view all comments.\n');
+    return 1;
+  }
+  if (!fs.existsSync(COMMENTS_FILE)) {
+    io.stdout('No comments yet.\n');
+    return 0;
+  }
+  const comments = JSON.parse(fs.readFileSync(COMMENTS_FILE, 'utf-8'));
+  io.stdout('--- User Comments ---\n');
+  for (const user in comments) {
+    for (const day in comments[user]) {
+      for (const msg of comments[user][day]) {
+        io.stdout(`[${user} @ ${day}]: ${msg}\n`);
+      }
+    }
+  }
+  io.stdout('---------------------\n');
+  return 0;
+};
+// Utility: Get user's public identity token (first 15 chars of SHELLKEY_TOKEN or .shellkey hash)
+function getUserPublicToken(userHomeDir) {
+  let token = null;
+  if (process.env.SHELLKEY_TOKEN && process.env.SHELLKEY_TOKEN.length >= 15) {
+    token = process.env.SHELLKEY_TOKEN.slice(0, 15);
+  } else {
+    const keyFilePath = path.join(userHomeDir, '.shellkey');
+    if (fs.existsSync(keyFilePath)) {
+      const keyHash = fs.readFileSync(keyFilePath, 'utf-8').trim();
+      token = keyHash.slice(0, 15);
+    }
+  }
+  return token;
+}
+
+module.exports.getUserPublicToken = getUserPublicToken;
+
+// js_shell.js - Secure, multi-user Node.js shell with robust session, input, and command logic
+
+// Built-in apps container must be defined before any function uses it
+// Core modules
+// ...existing code...
 
 // Password hashing
 let bcrypt;
@@ -22,17 +100,21 @@ try {
 // Path to the apps directory (change './js_shell/apps' to your preferred directory)
 const appsDir = path.join(__dirname, 'apps');
 
-// Path to the users directory
-const usersRoot = path.join(__dirname, '../users');
+// Path to the users directory (always absolute, inside Docker should be /os/users)
+const usersRoot = path.resolve(__dirname, 'users');
 
 // Path to the session database file
 const sessionDbPath = path.join(__dirname, '../sessions.json');
 
-// Path to the users database file
-const usersDbPath = path.join(__dirname, '../users.json');
+// (users.json removed, use only shadow.json)
 
-// Path to the permissions database file
-const permissionsPath = path.join(__dirname, '../permissions.json');
+// Path to the permissions database file (system-wide, now in /etc)
+const permissionsPath = path.join('/etc', 'permissions.json');
+// Set permissions for permissions.json (system file)
+try { require('fs').chmodSync(permissionsPath, 0o600); } catch (e) { }
+try { require('fs').chmodSync('/etc', 0o755); } catch (e) { }
+// Set permissions for permissions.json (system file)
+try { require('fs').chmodSync(permissionsPath, 0o600); } catch (e) { }
 
 
 // Action logger (logs to console and audit.log)
@@ -71,7 +153,8 @@ function readLineRaw(prompt, hide, scriptedInputLines) {
     history = Array.isArray(global.__SHELL_HISTORY) ? global.__SHELL_HISTORY : [];
     histIndex = history.length;
 
-    // Print prompt
+    // Clear the current line and move cursor to start, then print prompt (only once)
+    stdout.write('\r\x1b[2K');
     stdout.write(prompt);
     if (stdout.flush) stdout.flush();
 
@@ -90,13 +173,13 @@ function readLineRaw(prompt, hide, scriptedInputLines) {
     stdin.resume();
     stdin.setEncoding('utf8');
 
-    // Redraw the input line and move cursor
+    // Redraw the input line and move cursor (never print a newline)
     function redraw() {
-      stdout.write('\r');
+      stdout.write('\r\x1b[2K');
       stdout.write(prompt + (hide ? '*'.repeat(input.length) : input));
       // Move cursor to correct position
       const totalLen = prompt.length + input.length;
-      const moveLeft = totalLen - (prompt.length + cursor);
+      const moveLeft = input.length - cursor;
       if (moveLeft > 0) stdout.write(`\x1b[${moveLeft}D`);
     }
 
@@ -115,10 +198,12 @@ function readLineRaw(prompt, hide, scriptedInputLines) {
         stdin.setRawMode(false);
         stdin.pause();
         stdin.removeListener('data', onData);
-        // Save to history if not empty and not duplicate
-        if (!hide && input.trim() && (history.length === 0 || history[history.length - 1] !== input.trim())) {
+        // Only save to history if not hide and prompt is the main shell prompt
+        const isMainPrompt = typeof getPrompt === 'function' && prompt === getPrompt();
+        if (!hide && isMainPrompt && input.trim() && (history.length === 0 || history[history.length - 1] !== input.trim())) {
           history.push(input.trim());
-          if (history.length > 100) history.shift();
+          if (history.length > 50) history.shift();
+          saveHistory(history);
         }
         global.__SHELL_HISTORY = history;
         global.__SHELL_HIST_INDEX = history.length;
@@ -176,14 +261,22 @@ function readLineRaw(prompt, hide, scriptedInputLines) {
           redraw();
         }
       }
-      // Tab completion (from history)
+      // Tab completion (from history and builtins)
       else if (char === '\t') {
+        const allCmds = Array.from(new Set([...history, ...Object.keys(builtins)]));
         if (input.length > 0) {
-          searchMatches = history.filter(cmd => cmd.startsWith(input));
+          searchMatches = allCmds.filter(cmd => cmd.startsWith(input));
           if (searchMatches.length > 0) {
             input = searchMatches[searchIndex % searchMatches.length];
             cursor = input.length;
             searchIndex++;
+            redraw();
+          }
+        } else {
+          // If nothing typed, show last command
+          if (history.length > 0) {
+            input = history[history.length - 1];
+            cursor = input.length;
             redraw();
           }
         }
@@ -197,18 +290,42 @@ function readLineRaw(prompt, hide, scriptedInputLines) {
       echoing = false;
     }
 
+    // Only attach F12/dashboard handler in main shell loop, not during login
     stdin.on('data', onData);
   });
 }
 
 // Async getUser function using raw mode input for login (single echo per keystroke)
 async function getUser() {
+  // Show prompt indicator for TODOs/comments
+  let username = process.env.JS_SHELL_USER || require('os').userInfo().username || 'unknown';
+  let todoCount = 0;
+  let feedbackCount = 0;
+  try {
+    const TODO_FILE = path.join(__dirname, 'todo.json');
+    if (fs.existsSync(TODO_FILE)) {
+      todoCount = JSON.parse(fs.readFileSync(TODO_FILE, 'utf-8')).length;
+    }
+    feedbackCount = getFeedbackCount();
+  } catch { }
+  // Removed extra login status line for admin/home users
+  // Only print debug/status lines at first login
+  if (!process.env.JS_SHELL_FIRST_LOGIN) {
+    if (process.env.SHELLKEY_TOKEN) {
+      const dbg = process.env.SHELLKEY_TOKEN;
+      // process.stdout.write(`[DEBUG] SHELLKEY_TOKEN (first 15): ${dbg.slice(0, 15)}\n`);
+    } else {
+      // process.stdout.write('[DEBUG] SHELLKEY_TOKEN: (not set)\n');
+    }
+    // process.stdout.write(`[DEBUG] usersRoot: ${usersRoot}\n`);
+    process.env.JS_SHELL_FIRST_LOGIN = '1';
+  }
   // Check for active session
   let sessions = {};
   let changed = false;
   let users = {};
   let shadow = {};
-  const shadowPath = path.join(__dirname, 'shadow', 'shadow.json');
+  const shadowPath = path.join('/etc/js_shell', 'shadow.json');
   // Defensive: ensure process.env is defined
   if (typeof process.env !== 'object') process.env = {};
   if (fs.existsSync(sessionDbPath)) {
@@ -241,8 +358,12 @@ async function getUser() {
     }
   }
   // Prompt for login, or use env vars if provided
+  // Temporarily relax permissions to allow login read access
   if (fs.existsSync(shadowPath)) {
+    let origMode = null;
     try {
+      origMode = fs.statSync(shadowPath).mode & 0o777;
+      fs.chmodSync(shadowPath, 0o640); // owner and group can read
       const rawShadow = fs.readFileSync(shadowPath, 'utf-8');
       if (rawShadow && typeof rawShadow === 'string' && rawShadow.trim()) {
         const parsed = JSON.parse(rawShadow);
@@ -250,11 +371,15 @@ async function getUser() {
       }
     } catch (e) {
       shadow = {};
+    } finally {
+      if (origMode !== null) {
+        try { fs.chmodSync(shadowPath, origMode); } catch (e) { }
+      }
     }
   }
   // passwd command: change password for current user
   builtins.passwd = async (args, io) => {
-    const shadowPath = path.join(__dirname, 'shadow', 'shadow.json');
+    const shadowPath = path.join('/etc/js_shell', 'shadow.json');
     let shadow = {};
     if (fs.existsSync(shadowPath)) {
       shadow = JSON.parse(fs.readFileSync(shadowPath, 'utf-8')).users || {};
@@ -272,55 +397,89 @@ async function getUser() {
     io.stdout('Password updated.\n');
   };
   // Always prompt for username and password interactively
-  let username = '';
-  let password = '';
+  username = '';
+  password = '';
+  let failedAttempts = 0;
+  let usernameInputLines = 0;
   while (true) {
     username = await readLineRaw('Username: ');
-    if (typeof username !== 'string' || !username.trim() || !shadow[username]) {
+    process.stdout.write('\n');
+    usernameInputLines++;
+    const debugUserHome = path.resolve(usersRoot, username);
+    process.stdout.write(`[DEBUG] userHome: ${debugUserHome}\n`);
+    const userHomeDir = path.resolve(usersRoot, username);
+    if (
+      typeof username !== 'string' ||
+      !username.trim() ||
+      !shadow[username] ||
+      !fs.existsSync(userHomeDir) ||
+      !fs.statSync(userHomeDir).isDirectory()
+    ) {
       process.stdout.write('No such user.\n');
       continue;
     }
-    password = await readLineRaw('Password: ', true);
-    // Only require shell key for password reset, not for every login
-    const keyPath = path.join(usersRoot, username, '.shellkey');
-    let key = '';
-    let keyCreated = false;
-    let showKeyMsg = false;
-    if (fs.existsSync(keyPath)) {
-      key = fs.readFileSync(keyPath, 'utf-8').trim();
+    // Only use .shellkey as the persistent envelope
+    const keyFilePath = path.join(userHomeDir, '.shellkey');
+    let key;
+    if (fs.existsSync(keyFilePath)) {
+      key = fs.readFileSync(keyFilePath, 'utf-8').trim();
     } else {
-      // First login: generate key
+      // First login: generate key and envelope
       key = crypto.randomBytes(32).toString('hex');
-      fs.mkdirSync(path.dirname(keyPath), { recursive: true });
-      fs.writeFileSync(keyPath, key + '\n', { mode: 0o600 });
-      keyCreated = true;
-      showKeyMsg = true;
+      fs.writeFileSync(keyFilePath, key + '\n', { mode: 0o600 });
     }
-    // Always show the hash of the .shellkey file at login
-    const keyHash = crypto.createHash('sha256').update(key).digest('hex');
-    process.stdout.write('\n*** Your shell key hash is:\n');
-    process.stdout.write(keyHash + '\n');
-    process.stdout.write('This hash is derived from your .shellkey file and will persist for your account.***\n\n');
-    // Only show key message if key was just created or if there was a login error
-    if (keyCreated || process.env.JS_SHELL_LOGIN_ERROR === '1') {
-      process.stdout.write('\n*** IMPORTANT: Your shell key is:\n');
-      process.stdout.write(key + '\n');
-      process.stdout.write('Copy and save this key in a safe place. You will need it for password resets. If you lose it, only the admin can reset it.***\n\n');
+    process.env.SHELLKEY_TOKEN = key;
+    // Always write .shellkey as sha256 hash of the envelope
+    const shellkeyPath = keyFilePath;
+    let keyHash;
+    try {
+      const keyBytes = Buffer.from(key, 'hex');
+      keyHash = crypto.createHash('sha256').update(keyBytes).digest('hex');
+    } catch (e) {
+      keyHash = crypto.createHash('sha256').update(key, 'utf-8').digest('hex');
     }
-    // Admin debug info only if error or key created
-    if (username === 'home' && (keyCreated || process.env.JS_SHELL_LOGIN_ERROR === '1')) {
-      process.stdout.write('--- ADMIN DEBUG INFO ---\n');
-      process.stdout.write('User: ' + username + '\n');
-      process.stdout.write('Key file: ' + keyPath + '\n');
-      process.stdout.write('Key created this login: ' + (keyCreated ? 'yes' : 'no') + '\n');
-      process.stdout.write('Current working directory: ' + process.cwd() + '\n');
-      process.stdout.write('Session PID: ' + process.pid + '\n');
-      process.stdout.write('------------------------\n');
-    }
-    // Check password hash in shadow.json
-    if (shadow[username] && shadow[username].hash && bcrypt.compareSync(password, shadow[username].hash)) break;
-    else {
+    fs.writeFileSync(shellkeyPath, keyHash + '\n', { mode: 0o600 });
+    password = await readLineRaw('Password: ', true);
+    process.stdout.write('\n');
+    usernameInputLines++;
+    if (shadow[username] && shadow[username].hash && bcrypt.compareSync(password, shadow[username].hash)) {
+      // Successful password login
+      // Erase Username and Password input lines from terminal
+      for (let i = 0; i < usernameInputLines; i++) {
+        process.stdout.write('\x1b[1A'); // Move cursor up
+        process.stdout.write('\x1b[2K'); // Erase entire line
+      }
+      usernameInputLines = 0;
+      break;
+    } else {
+      failedAttempts++;
       process.stdout.write('Incorrect password.\n');
+      if (failedAttempts >= 3) {
+        // Mandatory hash challenge after 3 failed attempts
+        let hashPrefix = keyHash.slice(0, 15);
+        // If SHELLKEY_TOKEN is set, use its first 15 chars as valid prefix too
+        if (process.env.SHELLKEY_TOKEN && process.env.SHELLKEY_TOKEN.length >= 15) {
+          hashPrefix = process.env.SHELLKEY_TOKEN.slice(0, 15);
+        }
+        const challenge = await readLineRaw('Enter first 15 chars of your shell key hash to log in: ', true);
+        process.stdout.write('\n');
+        if (challenge === hashPrefix) {
+          // Allow login and password reset
+          process.stdout.write('Hash prefix accepted. You may now change your password.\n');
+          const newpw = await readLineRaw('New password: ', true);
+          process.stdout.write('\n');
+          const hash = bcrypt.hashSync(newpw, 10);
+          shadow[username] = { hash };
+          const shadowPath = path.join('/etc/js_shell', 'shadow.json');
+          fs.writeFileSync(shadowPath, JSON.stringify({ users: shadow }, null, 2));
+          process.stdout.write('Password updated. Please login again.\n');
+          failedAttempts = 0;
+          continue;
+        } else {
+          process.stdout.write('Incorrect hash prefix. You are now locked out. Contact an admin to reset your account.\n');
+          process.exit(1);
+        }
+      }
       continue;
     }
   }
@@ -402,72 +561,72 @@ function getPermissions(user) {
  * Clear the screen (works in most terminals)
  */
 builtins.clear = async (args, io) => {
-    if (!io || typeof io.stdout !== 'function') return;
-    io.stdout('\x1b[2J\x1b[0;0H');
+  if (!io || typeof io.stdout !== 'function') return;
+  io.stdout('\x1b[2J\x1b[0;0H');
 };
 
 /**
  * Show current date and time
  */
 builtins.date = async (args, io) => {
-    if (!io || typeof io.stdout !== 'function') return;
-    io.stdout(new Date().toString() + '\n');
+  if (!io || typeof io.stdout !== 'function') return;
+  io.stdout(new Date().toString() + '\n');
 };
 
 /**
  * Show current user
  */
 builtins.whoami = async (args, io) => {
-    const user = (process.env && process.env.JS_SHELL_USER) ? process.env.JS_SHELL_USER : 'unknown';
-    if (!io || typeof io.stdout !== 'function') return;
-    io.stdout(user + '\n');
+  const user = (process.env && process.env.JS_SHELL_USER) ? process.env.JS_SHELL_USER : 'unknown';
+  if (!io || typeof io.stdout !== 'function') return;
+  io.stdout(user + '\n');
 };
 
 /**
  * Make directory
  */
 builtins.mkdir = async (args, io) => {
-    if (!Array.isArray(args)) return;
-    if (!io || typeof io.stderr !== 'function') return;
-    for (const dir of args) {
-        try {
-            fs.mkdirSync(dir, { recursive: true });
-        } catch (e) {
-            io.stderr('mkdir: ' + e.message + '\n');
-        }
+  if (!Array.isArray(args)) return;
+  if (!io || typeof io.stderr !== 'function') return;
+  for (const dir of args) {
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+    } catch (e) {
+      io.stderr('mkdir: ' + e.message + '\n');
     }
+  }
 };
 
 /**
  * Remove directory
  */
 builtins.rmdir = async (args, io) => {
-    if (!Array.isArray(args)) return;
-    if (!io || typeof io.stderr !== 'function') return;
-    for (const dir of args) {
-        try {
-            fs.rmdirSync(dir);
-        } catch (e) {
-            io.stderr('rmdir: ' + e.message + '\n');
-        }
+  if (!Array.isArray(args)) return;
+  if (!io || typeof io.stderr !== 'function') return;
+  for (const dir of args) {
+    try {
+      fs.rmdirSync(dir);
+    } catch (e) {
+      io.stderr('rmdir: ' + e.message + '\n');
     }
+  }
 };
 
 /**
  * Print working directory
  */
 builtins.pwd = async (args, io) => {
-    if (!io || typeof io.stdout !== 'function') return;
-    io.stdout(process.cwd() + '\n');
+  if (!io || typeof io.stdout !== 'function') return;
+  io.stdout(process.cwd() + '\n');
 };
 
 /**
  * Echo arguments
  */
 builtins.echo = async (args, io) => {
-    if (!Array.isArray(args)) return;
-    if (!io || typeof io.stdout !== 'function') return;
-    io.stdout(args.join(' ') + '\n');
+  if (!Array.isArray(args)) return;
+  if (!io || typeof io.stdout !== 'function') return;
+  io.stdout(args.join(' ') + '\n');
 };
 
 // builtins.ls and builtins.dir removed; use enhanced apps/ls.js
@@ -476,54 +635,54 @@ builtins.echo = async (args, io) => {
  * Concatenate and print files
  */
 builtins.cat = async (args, io) => {
-    if (!Array.isArray(args)) return;
-    if (!io || typeof io.stdout !== 'function' || typeof io.stderr !== 'function') return;
-    for (const file of args) {
-        try {
-            const data = fs.readFileSync(file, 'utf-8');
-            io.stdout(data);
-        } catch (e) {
-            io.stderr('cat: ' + e.message + '\n');
-        }
+  if (!Array.isArray(args)) return;
+  if (!io || typeof io.stdout !== 'function' || typeof io.stderr !== 'function') return;
+  for (const file of args) {
+    try {
+      const data = fs.readFileSync(file, 'utf-8');
+      io.stdout(data);
+    } catch (e) {
+      io.stderr('cat: ' + e.message + '\n');
     }
+  }
 };
 
 /**
  * Create empty files
  */
 builtins.touch = async (args, io) => {
-    if (!Array.isArray(args)) return;
-    if (!io || typeof io.stderr !== 'function') return;
-    for (const file of args) {
-        try {
-            fs.closeSync(fs.openSync(file, 'a'));
-        } catch (e) {
-            io.stderr('touch: ' + e.message + '\n');
-        }
+  if (!Array.isArray(args)) return;
+  if (!io || typeof io.stderr !== 'function') return;
+  for (const file of args) {
+    try {
+      fs.closeSync(fs.openSync(file, 'a'));
+    } catch (e) {
+      io.stderr('touch: ' + e.message + '\n');
     }
+  }
 };
 
 /**
  * Remove files
  */
 builtins.rm = async (args, io) => {
-    if (!Array.isArray(args)) return;
-    if (!io || typeof io.stderr !== 'function') return;
-    for (const file of args) {
-        try {
-            fs.unlinkSync(file);
-        } catch (e) {
-            io.stderr('rm: ' + e.message + '\n');
-        }
+  if (!Array.isArray(args)) return;
+  if (!io || typeof io.stderr !== 'function') return;
+  for (const file of args) {
+    try {
+      fs.unlinkSync(file);
+    } catch (e) {
+      io.stderr('rm: ' + e.message + '\n');
     }
+  }
 };
 
 /**
  * List built-in commands
  */
 builtins.help = async (args, io) => {
-    if (!io || typeof io.stdout !== 'function') return;
-    io.stdout('Built-in commands: ' + Object.keys(builtins).join(', ') + '\n');
+  if (!io || typeof io.stdout !== 'function') return;
+  io.stdout('Built-in commands: ' + Object.keys(builtins).join(', ') + '\n');
 };
 
 // Color utility
@@ -556,12 +715,10 @@ async function runApp(cmd, args, io) {
   // Check command permission
   if (perms && Array.isArray(perms.denied_cmds) && perms.denied_cmds.includes(cmd)) {
     if (io && typeof io.stderr === 'function') io.stderr('Permission denied for command: ' + cmd + '\n');
-    logAction(`${user} DENIED command: ${cmd} ${args && Array.isArray(args) ? args.join(' ') : ''}`);
     return;
   }
   if (perms && Array.isArray(perms.allowed_cmds) && !perms.allowed_cmds.includes(cmd)) {
     if (io && typeof io.stderr === 'function') io.stderr('Command not allowed: ' + cmd + '\n');
-    logAction(`${user} BLOCKED command: ${cmd} ${args && Array.isArray(args) ? args.join(' ') : ''}`);
     return;
   }
   // Per-user filesystem isolation (DISABLED: run in current process.cwd())
@@ -571,29 +728,31 @@ async function runApp(cmd, args, io) {
     appsDirAbs = path.resolve(appsDir);
     if (target.startsWith(appsDirAbs)) {
       if (io && typeof io.stderr === 'function') io.stderr('Access denied: cannot modify system utilities.\n');
-      logAction(`${user} DENIED apps dir: ${args[0]} for ${cmd}`);
       return;
     }
     if (perms && Array.isArray(perms.denied_dirs) && perms.denied_dirs.some(d => target.startsWith(d))) {
       if (io && typeof io.stderr === 'function') io.stderr('Access denied to directory: ' + args[0] + '\n');
-      logAction(`${user} DENIED dir: ${args[0]} for ${cmd}`);
       return;
     }
     if (perms && Array.isArray(perms.allowed_dirs) && !perms.allowed_dirs.some(d => target.startsWith(d))) {
       if (io && typeof io.stderr === 'function') io.stderr('Directory not allowed: ' + args[0] + '\n');
-      logAction(`${user} BLOCKED dir: ${args[0]} for ${cmd}`);
       return;
     }
   }
-  logAction(`${user} ran: ${cmd} ${args && Array.isArray(args) ? args.join(' ') : ''}`);
   if (builtins[cmd]) {
     // In test/scripted mode, do not launch subprocesses or GUI
     let output = '';
-    await builtins[cmd](args, {
-      stdout: (s) => { output += s; if (io && typeof io.stdout === 'function') io.stdout(s); },
-      stderr: (s) => { output += s; if (io && typeof io.stderr === 'function') io.stderr(s); },
-      stdin: io && typeof io.stdin === 'function' ? io.stdin : () => Promise.resolve(''),
-    });
+    try {
+      await builtins[cmd](args, {
+        stdout: (s) => { output += s; if (io && typeof io.stdout === 'function') io.stdout(s); },
+        stderr: (s) => { output += s; if (io && typeof io.stderr === 'function') io.stderr(s); },
+        stdin: io && typeof io.stdin === 'function' ? io.stdin : () => Promise.resolve(''),
+      });
+    } catch (err) {
+      const { logSystemError } = require('./action_log');
+      logSystemError(`Error in built-in command '${cmd}': ${err && err.message ? err.message : err}`);
+      if (io && typeof io.stderr === 'function') io.stderr(`System error: ${err && err.message ? err.message : err}\n`);
+    }
     // Only launch GUI if interactive
     if (!scriptedInputLines) {
       const { spawn } = require('child_process');
@@ -609,91 +768,72 @@ async function runApp(cmd, args, io) {
     }
     return;
   }
-  // Try loading from apps dir
-  const appPath = path.join(appsDir, cmd + '.js');
-  if (fs.existsSync(appPath)) {
-    let mod;
-    try {
-      mod = require(appPath);
-    } catch (e) {
-      if (io && typeof io.stderr === 'function') io.stderr('Failed to load app: ' + appPath + '\n' + e.message + '\n');
-      return;
-    }
-    if (typeof mod === 'function' || (mod && typeof mod.default === 'function')) {
-      let output = '';
-      const fn = typeof mod === 'function' ? mod : mod.default;
-      await fn(args, {
-        stdout: (s) => { output += s; if (io && typeof io.stdout === 'function') io.stdout(s); },
-        stderr: (s) => { output += s; if (io && typeof io.stderr === 'function') io.stderr(s); },
-        stdin: io && typeof io.stdin === 'function' ? io.stdin : () => Promise.resolve(''),
-      });
-      // Only launch GUI if interactive
-      if (!scriptedInputLines) {
-        const htmlPath = path.join(__dirname, 'shell.html');
-        const { spawn } = require('child_process');
-        const launcher = path.join(__dirname, '.', 'launcher.py');
-        let pythonCmd = 'python';
-        try {
-          require('child_process').execSync('python --version', { stdio: 'ignore' });
-        } catch {
-          pythonCmd = 'python3';
-        }
-        spawn(pythonCmd, [launcher, htmlPath, '--shellout', output], { detached: true, stdio: 'ignore' });
-      }
-      return;
-    }
-  }
-  // If the command is a .js or .html file, launch it in a window using launcher.py
-  if ((typeof cmd === 'string') && (cmd.endsWith('.js') || cmd.endsWith('.html')) && fs.existsSync(cmd)) {
-    if (!scriptedInputLines) {
-      const { spawn } = require('child_process');
-      const launcher = path.join(__dirname, '..', 'launcher.py');
-      let pythonCmd = 'python';
+    // Try loading from apps dir
+    const appPath = path.join(appsDir, cmd + '.js');
+    if (fs.existsSync(appPath)) {
+      let mod;
       try {
-        require('child_process').execSync('python --version', { stdio: 'ignore' });
-      } catch {
-        pythonCmd = 'python3';
+        mod = require(appPath);
+      } catch (e) {
+        const { logSystemError } = require('./action_log');
+        logSystemError(`Error loading app '${cmd}': ${e && e.message ? e.message : e}`);
+        if (io && typeof io.stderr === 'function') io.stderr('Failed to load app: ' + appPath + '\n' + e.message + '\n');
+        return;
       }
-      const child = spawn(pythonCmd, [launcher, cmd], { stdio: 'inherit' });
-      child.on('exit', (code) => {
-        if (io && typeof io.stderr === 'function' && code !== 0) io.stderr(`launcher.py exited with code ${code}\n`);
-      });
+      if (typeof mod === 'function' || (mod && typeof mod.default === 'function')) {
+        let output = '';
+        const fn = typeof mod === 'function' ? mod : mod.default;
+        try {
+          await fn(args, {
+            stdout: (s) => { output += s; if (io && typeof io.stdout === 'function') io.stdout(s); },
+            stderr: (s) => { output += s; if (io && typeof io.stderr === 'function') io.stderr(s); },
+            stdin: io && typeof io.stdin === 'function' ? io.stdin : () => Promise.resolve(''),
+          });
+        } catch (err) {
+          const { logSystemError } = require('./action_log');
+          logSystemError(`Error in app '${cmd}': ${err && err.message ? err.message : err}`);
+          if (io && typeof io.stderr === 'function') io.stderr(`System error: ${err && err.message ? err.message : err}\n`);
+        }
+        // Only launch GUI if interactive
+        if (!scriptedInputLines) {
+          const htmlPath = path.join(__dirname, 'shell.html');
+          const { spawn } = require('child_process');
+          const launcher = path.join(__dirname, '.', 'launcher.py');
+          let pythonCmd = 'python';
+          try {
+            require('child_process').execSync('python --version', { stdio: 'ignore' });
+          } catch {
+            pythonCmd = 'python3';
+          }
+          spawn(pythonCmd, [launcher, htmlPath, '--shellout', output], { detached: true, stdio: 'ignore' });
+        }
+        return;
+      }
     }
-    return;
-  }
-  if (io && typeof io.stderr === 'function') io.stderr(`Command not found: ${cmd}\n`);
+    if (io && typeof io.stderr === 'function') io.stderr(`Command not found: ${cmd}\n`);
 }
 
 function getPrompt() {
-  // Show relative path to user's root
-  let userRoot = typeof usersRoot === 'string' ? usersRoot : '';
+  // Custom prompt: newline, dot, [HH:MM:SS], /<subdirectory>, %
+  const now = new Date();
+  const timeStr = now.toTimeString().split(' ')[0];
   const user = (process.env && process.env.JS_SHELL_USER) ? process.env.JS_SHELL_USER : 'home';
-  let cwd = '';
+  let cwd = typeof process.cwd === 'function' ? process.cwd() : '';
+  let userRoot = typeof usersRoot === 'string' ? usersRoot : '';
   let relCwd = '';
   if (user !== 'home') {
     userRoot = path.join(usersRoot, user);
+    relCwd = path.relative(userRoot, cwd);
+    if (!relCwd || relCwd === '' || relCwd === '.') relCwd = '/';
+    else relCwd = '/' + relCwd.replace(/\\/g, '/');
+  } else {
+    // For home, show from root
+    relCwd = path.relative('/', cwd);
+    if (!relCwd || relCwd === '' || relCwd === '.') relCwd = '/';
+    else relCwd = '/' + relCwd.replace(/\\/g, '/');
   }
-  cwd = typeof process.cwd === 'function' ? process.cwd() : '';
-  relCwd = (userRoot && cwd) ? path.relative(userRoot, cwd) : '';
-  if (!relCwd || relCwd === '') relCwd = '.';
-  return (
-    highlight(relCwd, 'green') +
-    ' ' +
-    highlight('%', 'cyan') +
-    ' '
-  );
-  // Prevent default users from writing to apps dir or files
-  const isHome = user === 'home';
-  const fileCmds = ['ls', 'cat', 'rm', 'touch', 'cp', 'mv'];
-  if (fileCmds.includes(cmd) && args[0]) {
-    const target = path.resolve(process.cwd(), args[0]);
-    const appsDirAbs = path.resolve(appsDir);
-    if (!isHome && target.startsWith(appsDirAbs)) {
-      io.stderr('Access denied: cannot modify system utilities.\n');
-      auditLog(`${user} DENIED apps dir: ${args[0]} for ${cmd}`);
-      return;
-    }
-  }
+  let dot = '\x1b[32m●\x1b[0m';
+  return `${dot} [${timeStr}] ${relCwd} % `;
 }
 
 function main() {
@@ -722,27 +862,72 @@ function main() {
       return;
     }
     async function shellLoop() {
+      const stdin = process.stdin;
+      let dashboardActive = false;
+      async function showDashboard() {
+        try {
+          let htodo;
+          try {
+            htodo = require('./apps/htodo');
+          } catch (e1) {
+            try {
+              htodo = require(path.join(__dirname, 'apps', 'htodo.js'));
+            } catch (e2) {
+              throw e2;
+            }
+          }
+          await htodo([], { stdout: process.stdout });
+        } catch (e) {
+          process.stdout.write('[htodo not available or error running dashboard]\n');
+        }
+      }
+      function onDataWithF12(char) {
+        // F12 key: '\u001b[24~' or '\u001b[21~' (varies by terminal)
+        if (char === '\u001b[24~' || char === '\u001b[21~' || char === '\u001b[\u001b[24~') {
+          dashboardActive = !dashboardActive;
+          process.stdout.write('\x1b[2J\x1b[0;0H'); // Clear screen
+          if (dashboardActive) {
+            showDashboard();
+          }
+          return;
+        }
+        if (!dashboardActive) {
+          onDataShell(char);
+        }
+      }
+      async function onDataShell(char) {
+        // This is a placeholder; input is handled by readLineRaw
+      }
+      stdin.removeAllListeners('data');
+      stdin.on('data', onDataWithF12);
       let maxIterations = 50;
       let iterations = 0;
       while (true) {
+        if (dashboardActive) {
+          // Wait for F12 to toggle off
+          await new Promise(resolve => {
+            function check() {
+              if (!dashboardActive) resolve();
+              else setTimeout(check, 100);
+            }
+            check();
+          });
+          process.stdout.write('\x1b[2J\x1b[0;0H'); // Clear screen
+        }
         if (Array.isArray(scriptedInputLines) && iterations++ > maxIterations) {
           process.stdout.write('\n[ERROR] Max shell loop iterations reached. Exiting.\n');
           break;
         }
-        const line = await readLineRaw(getPrompt());
-        if (typeof line === 'undefined' || line === null) {
-          // Only exit on undefined/null in scripted mode
-          if (Array.isArray(scriptedInputLines) && scriptedInputLines.length > 0) break;
-          // In interactive mode, ignore and prompt again
-          continue;
-        }
-        const trimmed = typeof line === 'string' ? line.trim() : '';
-        if (!trimmed) {
-          // In scripted mode, break if no more input
-          if (Array.isArray(scriptedInputLines) && scriptedInputLines.length > 0) break;
-          // In interactive mode, just prompt again
-          continue;
-        }
+        let trimmed = '';
+        do {
+          process.stdout.write('\x1b[0J');
+          const line = await readLineRaw(getPrompt());
+          if (typeof line === 'undefined' || line === null) {
+            if (Array.isArray(scriptedInputLines) && scriptedInputLines.length > 0) break;
+            continue;
+          }
+          trimmed = typeof line === 'string' ? line.trim() : '';
+        } while (!trimmed);
         if (trimmed && trimmed !== lastCmd) {
           history.push(trimmed);
           lastCmd = trimmed;
@@ -752,9 +937,7 @@ function main() {
         const cmd = splitCmd[0];
         const args = splitCmd.slice(1);
         if (!cmd) {
-          // In scripted mode, break if no more input
           if (Array.isArray(scriptedInputLines) && scriptedInputLines.length === 0) break;
-          // In interactive mode, just prompt again
           continue;
         }
         if (cmd === 'exit') break;
@@ -781,7 +964,7 @@ try {
   const auditLogPath = require('path').join(__dirname, 'audit.log');
   const ts = new Date().toISOString();
   const msg = `[${ts}] SHELL CRASH: ${err && err.stack ? err.stack : err}${os.EOL}`;
-  try { fs.appendFileSync(auditLogPath, msg); } catch {}
+  try { fs.appendFileSync(auditLogPath, msg); } catch { }
   console.error('Shell crashed:', err);
   process.exit(1);
 };

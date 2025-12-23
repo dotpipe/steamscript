@@ -1,3 +1,9 @@
+  // Get the user's public identity token (first 15 chars of SHELLKEY_TOKEN or .shellkey hash)
+  const path = require('path');
+  const js_shell = require('../js_shell');
+  const userHome = process.env.HOME || process.env.USERPROFILE || path.join(__dirname, '..', 'users', 'home');
+  const publicToken = js_shell.getUserPublicToken(userHome);
+  io.stdout(`[DEBUG] User public identity token (first 15): ${publicToken}\n`);
 // dotpipe.js - DotPipe remote connection and UX app for js_shell
 // This app allows connecting to other machines running dotPipe-compatible shells
 // and provides a self-contained window for remote command execution and testing.
