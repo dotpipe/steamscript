@@ -5,10 +5,17 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
+const { addAlertFromException } = require('./htodo_alert');
 function regenKey(userHomeDir) {
   const keyFilePath = path.join(userHomeDir, '.shellkey');
   // Generate a new random key
-  const newKey = crypto.randomBytes(32).toString('hex');
+  let newKey;
+  try {
+    newKey = crypto.randomBytes(32).toString('hex');
+  } catch (e) {
+    addAlertFromException('regenkey', e);
+    throw e;
+  }
   // Write the new key to .shellkey (envelope)
   fs.writeFileSync(keyFilePath, newKey + '\n', { mode: 0o600 });
   // Compute and write the new public hash
@@ -17,6 +24,7 @@ function regenKey(userHomeDir) {
     const keyBytes = Buffer.from(newKey, 'hex');
     keyHash = crypto.createHash('sha256').update(keyBytes).digest('hex');
   } catch (e) {
+    addAlertFromException('regenkey', e);
     keyHash = crypto.createHash('sha256').update(newKey, 'utf-8').digest('hex');
   }
   fs.writeFileSync(keyFilePath, keyHash + '\n', { mode: 0o600 });

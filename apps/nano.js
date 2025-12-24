@@ -8,8 +8,14 @@ module.exports = async function(args, io, shell) {
     return 1;
   }
   let lines = [];
+  const { addAlertFromException } = require('./htodo_alert');
   if (fs.existsSync(file)) {
-    lines = fs.readFileSync(file, 'utf8').split(/\r?\n/);
+    try {
+      lines = fs.readFileSync(file, 'utf8').split(/\r?\n/);
+    } catch (e) {
+      addAlertFromException('nano', e);
+      io.stderr('nano: failed to read file: ' + e.message + '\n');
+    }
   }
   if (lines.length === 0) lines.push('');
   let cursor = 0;

@@ -17,10 +17,12 @@ module.exports = function(args, io) {
       io.stderr('mkdir: access denied: ' + dir + '\n');
       return;
     }
+    const { addAlertFromException } = require('./htodo_alert');
     try {
       fs.mkdirSync(dir, { recursive: true });
     } catch (e) {
       io.stderr('mkdir: ' + dir + ': ' + e.message + '\n');
+      addAlertFromException('mkdir', e);
     }
   });
 };
@@ -33,6 +35,7 @@ module.exports = function(args, io) {
         fs.mkdirSync(dir, { recursive: true });
       } catch (e) {
         io.stderr('mkdir: ' + dir + ': ' + e.message + '\n');
+        addAlertFromException('mkdir', e);
       }
     }
   } else {

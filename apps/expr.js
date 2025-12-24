@@ -5,10 +5,12 @@ if (!argv.length) {
   process.stderr.write('expr: usage: expr expression\n');
   process.exit(1);
 }
+const { addAlertFromException } = require('./htodo_alert');
 try {
   // Evaluate simple arithmetic expressions
   const result = eval(argv.join(' '));
   console.log(result);
 } catch (e) {
   process.stderr.write('expr: invalid expression\n');
+  addAlertFromException('expr', e);
 }

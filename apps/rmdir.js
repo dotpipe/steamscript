@@ -17,10 +17,12 @@ module.exports = function(args, io) {
       io.stderr('rmdir: access denied: ' + dir + '\n');
       return;
     }
+    const { addAlertFromException } = require('./htodo_alert');
     try {
       fs.rmdirSync(dir);
     } catch (e) {
       io.stderr('rmdir: ' + dir + ': ' + e.message + '\n');
+      addAlertFromException('rmdir', e);
     }
   });
 };
@@ -33,6 +35,7 @@ module.exports = function(args, io) {
         fs.rmdirSync(dir);
       } catch (e) {
         io.stderr('rmdir: ' + dir + ': ' + e.message + '\n');
+        addAlertFromException('rmdir', e);
       }
     }
   } else {

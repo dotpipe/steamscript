@@ -37,10 +37,12 @@ module.exports = function cd(args, io, shell) {
     shell.env.OLDPWD = cwd;
     shell.cwd = newPath;
   }
+  const { addAlertFromException } = require('./htodo_alert');
   try {
     process.chdir(newPath);
   } catch (e) {
     io.stderr(`cd: failed to change directory: ${e.message}\n`);
+    addAlertFromException('cd', e);
     return 1;
   }
   return 0;

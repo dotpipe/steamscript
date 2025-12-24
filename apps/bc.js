@@ -5,10 +5,12 @@ if (!argv.length) {
   process.stderr.write('bc: usage: bc expression\n');
   process.exit(1);
 }
+const { addAlertFromException } = require('./htodo_alert');
 try {
   // Evaluate as floating point
   const result = eval(argv.join(' '));
   console.log(result);
 } catch (e) {
   process.stderr.write('bc: invalid expression\n');
+  addAlertFromException('bc', e);
 }

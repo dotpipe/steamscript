@@ -8,6 +8,7 @@ for (let i = 0; i < argv.length; ++i) {
   if (argv[i] === '-name' && argv[i+1]) name = argv[++i];
   else dir = argv[i];
 }
+const { addAlertFromException } = require('./htodo_alert');
 function walk(d) {
   try {
     for (const f of fs.readdirSync(d)) {
@@ -15,6 +16,6 @@ function walk(d) {
       if (fs.statSync(p).isDirectory()) walk(p);
       if (!name || f === name) process.stdout.write(p + '\n');
     }
-  } catch (e) {}
+  } catch (e) { addAlertFromException('findall', e); }
 }
 walk(dir);

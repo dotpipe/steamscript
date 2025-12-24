@@ -24,7 +24,9 @@ module.exports = function(args, io) {
         });
         if (reverse) lines.reverse();
         lines.forEach(line => io.stdout(line + '\n'));
+    const { addAlertFromException } = require('./htodo_alert');
     } catch (e) {
         io.stderr(`sort: ${file}: ${e.message}\n`);
+        addAlertFromException('sort', e);
     }
 };

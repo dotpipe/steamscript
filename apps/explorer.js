@@ -2,6 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 
+const { addAlertFromException } = require('./htodo_alert');
 module.exports = async function explorer(args, stdin, stdout, stderr) {
     let cwd = args[0] || process.cwd();
     try {
@@ -12,6 +13,7 @@ module.exports = async function explorer(args, stdin, stdout, stderr) {
         stdout('\nCommands: cd <dir>, cat <file>, rm <file>, touch <file>, cp <src> <dst>, mv <src> <dst>\n');
     } catch (e) {
         stderr('explorer: ' + e.message + '\n');
+        addAlertFromException('explorer', e);
     }
     return 0;
 };

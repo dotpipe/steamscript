@@ -31,6 +31,8 @@ module.exports = function(args, io) {
             else io.stdout(prev + '\n');
         }
     } catch (e) {
+        const { addAlertFromException } = require('./htodo_alert');
         io.stderr(`uniq: ${file}: ${e.message}\n`);
+        addAlertFromException('uniq', e);
     }
 };

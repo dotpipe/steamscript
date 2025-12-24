@@ -1,0 +1,22 @@
+{
+  "type": "menu",
+  "title": "TODO & Feedback Dashboard",
+  "dataSource": ["todo.json"],
+  "showPrompt": false,
+  "ownershipProtocol": true,
+  "useArrows": true,
+  "options": [
+    { "label": "[Add New Task]", "next": { "type": "textbox", "prompt": "Enter new task:", "onSubmit": "addTask" } },
+    { "label": "[View All Tasks]", "next": {
+        "type": "menu",
+        "title": "All Tasks",
+        "dataSource": ["todo.json"],
+        "options": "[{{todos}}]",
+        "useArrows": true,
+        "onSelect": "viewTask",
+        "exitToShell": "F12"
+      }
+    }
+  ],
+  "footer": "Up/Down: Move  Enter: Select  F12: Exit"
+}

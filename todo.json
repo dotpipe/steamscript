@@ -1,0 +1,17 @@
+[
+  {
+    "label": "Fix login bug",
+    "status": "open",
+    "priority": "high"
+  },
+  {
+    "label": "Add help docs",
+    "status": "feedback",
+    "priority": "low"
+  },
+  {
+    "label": "Refactor dashboard renderer",
+    "status": "in progress",
+    "priority": "medium"
+  }
+]

@@ -1,0 +1,15 @@
+{
+  "type": "modal",
+  "title": "Welcome to DotPipe Terminal Demo",
+  "content": "This modal takes over the screen. Press Enter to continue.",
+  "file": null,
+  "showPrompt": false,
+  "closeOn": "Enter,Esc",
+  "next": {
+    "type": "modal",
+    "showPrompt": false,
+    "closeOn": "Enter,Esc",
+    "title": "Second Modal",
+    "content": "This is a second modal. Press Enter to return to the shell."
+  }
+}

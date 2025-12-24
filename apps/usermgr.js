@@ -43,7 +43,6 @@ module.exports = async function usermgr(args, io) {
       return 1;
     }
     if (users[username]) {
-      const shadowPath = path.join('/etc/js_shell', 'shadow.json');
       return 1;
     }
     users[username] = { password, root: false };
@@ -56,41 +55,21 @@ module.exports = async function usermgr(args, io) {
     // Ensure shadow directory exists
     const shadowDir = path.dirname(shadowPath);
     if (!fs.existsSync(shadowDir)) fs.mkdirSync(shadowDir, { recursive: true });
-    let shadow = {};
-    if (fs.existsSync(shadowPath)) {
-      try {
-        shadow = JSON.parse(fs.readFileSync(shadowPath, 'utf-8')).users || {};
-      } catch { shadow = {}; }
-    }
     const hash = bcrypt.hashSync(password, 10);
-        let shadow = {};
-        if (fs.existsSync(shadowPath)) {
-          try {
-            shadow = JSON.parse(fs.readFileSync(shadowPath, 'utf-8')).users || {};
-          } catch { shadow = {}; }
-        }
+    shadow[username] = { hash };
+    fs.writeFileSync(shadowPath, JSON.stringify({ users: shadow }, null, 2));
+    try {
       fs.chmodSync('/etc', 0o755);
-      fs.chmodSync(path.dirname(shadowPath), 0o700);
+      fs.chmodSync(shadowDir, 0o700);
       fs.chmodSync(shadowPath, 0o600);
     } catch (e) {
       io.stderr('Warning: could not set permissions on /etc or /etc/shadow: ' + e.message + '\n');
     }
-    // Set permissions: /etc/shadow 700, /etc/shadow/shadow.json 600
-          if (shadow[username]) {
-      fs.chmodSync(shadowDir, 0o700);
-      fs.chmodSync(shadowPath, 0o600);
-    } catch (e) {
-          const hash = bcrypt.hashSync(password, 10);
-          shadow[username] = { hash };
-          // Ensure shadow directory exists
     return 0;
-  }
-      return 1;
     }
     delete users[username];
     fs.writeFileSync(usersDbPath, JSON.stringify({ users }, null, 2));
     // Remove from shadow.json
-    let shadow = {};
     if (fs.existsSync(shadowPath)) {
       try {
         shadow = JSON.parse(fs.readFileSync(shadowPath, 'utf-8')).users || {};
@@ -107,32 +86,21 @@ module.exports = async function usermgr(args, io) {
     io.stdout('Users:\n');
     Object.keys(users).forEach(u => io.stdout('  ' + u + (users[u].root ? ' (root)' : '') + '\n'));
     return 0;
-          if (!shadow[username]) {
   if (cmd === 'passwd') {
     const username = args[1];
     const password = args[2];
-          delete shadow[username];
+    if (!shadow[username]) {
       return 1;
     }
     if (!users[username]) {
       io.stderr('User not found.\n');
       return 1;
     }
-    users[username].password = password;
-    fs.writeFileSync(usersDbPath, JSON.stringify({ users }, null, 2));
-          Object.keys(shadow).forEach(u => io.stdout('  ' + u + '\n'));
-    let shadow = {};
-    if (fs.existsSync(shadowPath)) {
-      try {
-        shadow = JSON.parse(fs.readFileSync(shadowPath, 'utf-8')).users || {};
-      } catch { shadow = {}; }
-    }
-    const hash = bcrypt.hashSync(password, 10);
-    shadow[username] = { hash };
-    fs.writeFileSync(shadowPath, JSON.stringify({ users: shadow }, null, 2));
-          if (!shadow[username]) {
-    return 0;
-  }
-  io.stderr('Unknown usermgr command.\n');
-          const hash = bcrypt.hashSync(password, 10);
-          shadow[username] = { hash };
+        users[username].password = password;
+        fs.writeFileSync(usersDbPath, JSON.stringify({ users }, null, 2));
+        const hash = bcrypt.hashSync(password, 10);
+        shadow[username] = { hash };
+        fs.writeFileSync(shadowPath, JSON.stringify({ users: shadow }, null, 2));
+        return 0;
+      }
+      io.stderr('Unknown usermgr command.\n');

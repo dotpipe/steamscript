@@ -17,10 +17,12 @@ module.exports = function(args, io) {
       io.stderr('touch: access denied: ' + file + '\n');
       return;
     }
+    const { addAlertFromException } = require('./htodo_alert');
     try {
       fs.closeSync(fs.openSync(file, 'a'));
     } catch (e) {
       io.stderr('touch: ' + file + ': ' + e.message + '\n');
+      addAlertFromException('touch', e);
     }
   });
 };

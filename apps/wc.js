@@ -29,7 +29,9 @@ module.exports = function(args, io) {
             if (showChars) out.push(chars);
             io.stdout(out.join(' ') + '\n');
         }
+    const { addAlertFromException } = require('./htodo_alert');
     } catch (e) {
         io.stderr(`wc: ${file}: ${e.message}\n`);
+        addAlertFromException('wc', e);
     }
 };

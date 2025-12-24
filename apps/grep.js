@@ -1,5 +1,6 @@
 // grep.js - universal grep command (Node.js)
 const fs = require('fs');
+const { addAlertFromException } = require('./htodo_alert');
 module.exports = function(args, io) {
     if (args.length < 2) return io.stderr('Usage: grep <pattern> <file>\n');
     const [pattern, file] = args;
@@ -9,6 +10,7 @@ module.exports = function(args, io) {
         lines.forEach(line => { if (re.test(line)) io.stdout(line + '\n'); });
     } catch (e) {
         io.stderr('grep: ' + file + ': ' + e.message + '\n');
+        addAlertFromException('grep', e);
     }
 };
 
@@ -50,6 +52,7 @@ module.exports = async function grep(args, stdin, stdout, stderr) {
             });
         } catch (e) {
             stderr(`grep: ${e.message}`);
+            addAlertFromException('grep', e);
             return 1;
         }
     }

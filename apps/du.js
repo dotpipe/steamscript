@@ -52,7 +52,9 @@ module.exports = function(args, io) {
                 io.stdout((human ? humanSize(size) : size + ' bytes') + '\t' + file.name + '\n');
             });
         }
+    const { addAlertFromException } = require('./htodo_alert');
     } catch (e) {
         io.stderr('du: ' + e.message + '\n');
+        addAlertFromException('du', e);
     }
 };

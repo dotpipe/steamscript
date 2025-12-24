@@ -2,7 +2,7 @@
   "users": {
     "home": {
       "root": true,
-      "allowed_dirs": ["/"],
+      "allowed_dirs": ["/", "c:/Users/g0d77/steamscript/steamscript"],
       "allowed_cmds": ["ls", "cat", "echo", "touch", "rm", "pwd", "help", "cp", "mv", "grep", "head", "tail", "which", "find", "du", "sort", "uniq", "wc", "explorer", "python", "python3"],
       "denied_cmds": ["shutdown", "reboot"]
     }

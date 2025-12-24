@@ -27,13 +27,21 @@ module.exports = function(args, io) {
 	let useGlob = false;
 	let globPattern = null;
 	if (nonOptions.length > 0) {
-		if (nonOptions[nonOptions.length - 1].includes('*') || nonOptions[nonOptions.length - 1].includes('?')) {
+		const last = nonOptions[nonOptions.length - 1];
+		if (typeof last === 'string' && (last.includes('*') || last.includes('?'))) {
 			useGlob = true;
-			globPattern = nonOptions[nonOptions.length - 1];
-		} else {
-			dir = nonOptions[nonOptions.length - 1];
+			globPattern = last;
+		} else if (typeof last === 'string') {
+			dir = last;
+		}
+	} else if (args && args.length > 0) {
+		// Defensive: if only one part, use it as dir
+		if (typeof args[0] === 'string') {
+			dir = args[0];
 		}
 	}
+	// Final fallback: ensure dir is a string
+	if (typeof dir !== 'string' || !dir) dir = '.';
 	if (!isAllowed(dir)) {
 	  io.stderr('ls: access denied: ' + dir + '\n');
 	  return;
@@ -80,7 +88,9 @@ module.exports = function(args, io) {
 				io.stdout(`${perms} ${size} ${mtime} ${f.name}\n`);
 			});
 		}
+	const { addAlertFromException } = require('./htodo_alert');
 	} catch (e) {
 		io.stderr('ls: ' + e.message + '\n');
+		addAlertFromException('ls', e);
 	}
 };

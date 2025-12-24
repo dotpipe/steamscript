@@ -17,9 +17,11 @@ module.exports = function(args, io) {
       io.stderr('cp: access denied\n');
       return;
     }
+    const { addAlertFromException } = require('./htodo_alert');
     try {
       fs.copyFileSync(src, dst);
     } catch (e) {
       io.stderr('cp: ' + src + ' -> ' + dst + ': ' + e.message + '\n');
+      addAlertFromException('cp', e);
     }
 };

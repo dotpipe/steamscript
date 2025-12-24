@@ -1,0 +1,9 @@
+{
+  "title": "Demo JSON App",
+  "steps": [
+    { "text": "Welcome to the demo app! (prompt visible)", "showPrompt": false },
+    { "type": "modal", "title": "This step hides the prompt (modal)", "showPrompt": false },
+    { "text": "You can add more steps or prompts here. (prompt visible again)", "showPrompt": false }
+  ],
+  "prompt": "Type something to continue:"
+}

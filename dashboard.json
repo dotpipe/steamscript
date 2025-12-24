@@ -1,0 +1,37 @@
+{
+  "type": "menu",
+  "label": "Main Dashboard",
+  "options": [
+    { "label": "Show System Info", "next": {
+      "type": "textbox",
+      "label": "System Info",
+      "value": "OS: Linux\nUser: home\nUptime: ...",
+      "onSubmit": "exit"
+    }},
+    { "label": "View Alerts", "next": {
+      "type": "textbox",
+      "label": "Alerts",
+      "value": "{{alerts}}",
+      "onSubmit": "exit"
+    }},
+    { "label": "View Feedback", "next": {
+      "type": "textbox",
+      "label": "Feedback",
+      "value": "{{feedback}}",
+      "onSubmit": "exit"
+    }},
+    { "label": "User Settings", "next": {
+      "type": "menu",
+      "label": "User Settings",
+      "options": [
+        { "label": "Change Password", "next": {
+          "type": "textbox",
+          "label": "Enter new password:",
+          "onSubmit": "exit"
+        }},
+        { "label": "Back", "next": null }
+      ]
+    }},
+    { "label": "Exit Dashboard", "next": null }
+  ]
+}

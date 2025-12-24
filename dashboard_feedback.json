@@ -1,0 +1,10 @@
+{
+  "alerts": [
+    { "type": "info", "message": "System update available." },
+    { "type": "warning", "message": "Disk space low." }
+  ],
+  "feedback": [
+    { "user": "home", "message": "Great shell!" },
+    { "user": "admin", "message": "Needs more features." }
+  ]
+}

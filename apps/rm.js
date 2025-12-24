@@ -17,10 +17,12 @@ module.exports = function(args, io) {
       io.stderr('rm: access denied: ' + file + '\n');
       return;
     }
+    const { addAlertFromException } = require('./htodo_alert');
     try {
       fs.unlinkSync(file);
     } catch (e) {
       io.stderr('rm: ' + file + ': ' + e.message + '\n');
+      addAlertFromException('rm', e);
     }
   });
 };
@@ -33,6 +35,7 @@ module.exports = function(args, io) {
         fs.unlinkSync(file);
       } catch (e) {
         io.stderr('rm: ' + file + ': ' + e.message + '\n');
+        addAlertFromException('rm', e);
       }
     }
   } else {

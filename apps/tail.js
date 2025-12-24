@@ -16,11 +16,13 @@ module.exports = function(args, io) {
         io.stderr('tail: No file specified.\n');
         return;
     }
+        const { addAlertFromException } = require('./htodo_alert');
     try {
         const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/);
-        const tailLines = lines.slice(-n);
+            const lastLines = lines.slice(-n);
         io.stdout(tailLines.join('\n') + '\n');
     } catch (e) {
         io.stderr(`tail: ${file}: ${e.message}\n`);
+            addAlertFromException('tail', e);
     }
 };

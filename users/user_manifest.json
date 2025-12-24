@@ -1,0 +1,11 @@
+{
+  "name": "user_manifest",
+  "description": "Manifest for user-specific app and environment permissions.",
+  "depth": 0,
+  "ports": [],
+  "homeDir": "./users/USERNAME",
+  "screen": {
+    "dom": true,
+    "allowed": true
+  }
+}

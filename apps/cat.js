@@ -16,10 +16,12 @@ module.exports = function(args, io) {
       io.stderr('cat: access denied: ' + file + '\n');
       continue;
     }
+    const { addAlertFromException } = require('./htodo_alert');
     try {
       io.stdout(fs.readFileSync(file, 'utf8'));
     } catch (e) {
       io.stderr('cat: ' + file + ': ' + e.message + '\n');
+      addAlertFromException('cat', e);
     }
   }
 };

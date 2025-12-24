@@ -19,8 +19,10 @@ module.exports = function(args, io) {
   }
   try {
     fs.renameSync(src, dst);
+    const { addAlertFromException } = require('./htodo_alert');
   } catch (e) {
     io.stderr('mv: ' + src + ' -> ' + dst + ': ' + e.message + '\n');
+    addAlertFromException('mv', e);
   }
 };
 // mv.js - universal mv command
@@ -32,8 +34,10 @@ module.exports = function(args, io, input) {
     for (let i = 0; i < args.length - 1; ++i) {
       try {
         fs.renameSync(args[i], dest);
+        const { addAlertFromException } = require('./htodo_alert');
       } catch (e) {
         io.stderr('mv: ' + args[i] + ': ' + e.message + '\n');
+        addAlertFromException('mv', e);
       }
     }
   } else {

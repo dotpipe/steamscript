@@ -15,6 +15,7 @@ module.exports = function(args, io) {
         io.stderr('head: No file specified.\n');
         return;
     }
+    const { addAlertFromException } = require('./htodo_alert');
     try {
         const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/).slice(0, n);
         if (numberLines) {
@@ -24,5 +25,6 @@ module.exports = function(args, io) {
         }
     } catch (e) {
         io.stderr('head: ' + file + ': ' + e.message + '\n');
+        addAlertFromException('head', e);
     }
 };
